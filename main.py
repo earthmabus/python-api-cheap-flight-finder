@@ -1,19 +1,20 @@
 from data_manager import DataManager
 from flight_search import FlightSearch
+from notification_manager import NotificationManager
 import datetime as dt
 
 MY_CITY_CODE = "MCO"
 TRIP_DURATION_IN_DAYS = 2
 DAY_OF_WEEK_FRIDAY = 4
 
-MAX_NUM_DAYS_LOOKAHEAD = 28 * 4
+MAX_NUM_DAYS_LOOKAHEAD = 28 * 6
 
-def is_friday(day: dt.datetime) ->bool:
+def is_friday(day: dt.datetime) -> bool:
     '''determines if a specified datetime is a friday (used to search for weekend deals)'''
     return day.weekday() == DAY_OF_WEEK_FRIDAY
 
 # for each city, determine if there are any good prices within the next 2 weeks
-def search_for_weekend_deals(city_price_list, first_day_of_search, num_of_days_to_lookahead):
+def search_for_weekend_deals(flight_search, city_price_list, first_day_of_search, num_of_days_to_lookahead):
     retval = []
     for city in city_price_list:
         # get information about the city
@@ -34,7 +35,7 @@ def search_for_weekend_deals(city_price_list, first_day_of_search, num_of_days_t
 
             # look for all cheap flights between my city and the destination
             # print(f"searching for flights on {date2search_string} since it's a friday with return date of {return_date_string}")
-            matching_flights = fs.any_cheap_flights(origin_code=MY_CITY_CODE, dest_code=dest_code, departure_date=date2search_string, return_date=return_date_string, num_adults=2, max_price_to_pay=price_point)
+            matching_flights = flight_search.any_cheap_flights(origin_code=MY_CITY_CODE, dest_code=dest_code, departure_date=date2search_string, return_date=return_date_string, num_adults=2, max_price_to_pay=price_point)
 
             # if there are cheap flights, add it to the comprehensive list of all matches
             [retval.append(flight) for flight in matching_flights]
@@ -63,12 +64,11 @@ def construct_email(all_matches):
 
         message += "\n"
 
+    # return none or a dict of { subject, message }
+    retval = None
     if len(all_matches) > 0:
-        print()
-        print(f"Subject: {subject}")
-        print(f"Message:\n{message}")
-    else:
-        print("there are no weekend deals for the specified time ranges")
+        retval = { "subject": subject, "message": message }
+    return retval
 
 # get the current date so we can search for flights between now and next 2 weeks
 current_date = dt.datetime.now()
@@ -82,7 +82,13 @@ fs = FlightSearch()
 fs.get_access_token()
 
 # use the aformentioned objects to search for deals
-all_weekend_matches = search_for_weekend_deals(city_list, current_date, MAX_NUM_DAYS_LOOKAHEAD)
+all_weekend_matches = search_for_weekend_deals(fs, city_list, current_date, MAX_NUM_DAYS_LOOKAHEAD)
 
 # construct an email with the weekend deals
-construct_email(all_weekend_matches)
+if all_weekend_matches != []:
+    print("there are matches -- sending email!")
+    email_details = construct_email(all_weekend_matches)
+    nm = NotificationManager()
+    nm.send_email("earthmabus@hotmail.com", email_details['subject'], email_details['message'])
+else:
+    print("sorry, no weekend deals")
