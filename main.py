@@ -70,25 +70,83 @@ def construct_email(all_matches):
         retval = { "subject": subject, "message": message }
     return retval
 
-# get the current date so we can search for flights between now and next 2 weeks
-current_date = dt.datetime.now()
+def search_and_email(data_manager: DataManager):
+    # get the current date so we can search for flights between now and next 2 weeks
+    current_date = dt.datetime.now()
+
+    # instantiate a DataManager to get travel and price preferences
+    dataman = DataManager()
+    city_list = data_manager.get_data()
+
+    # instantiate a FlightSearch to search for flight deals
+    fs = FlightSearch()
+    fs.get_access_token()
+
+    # use the aformentioned objects to search for deals
+    all_weekend_matches = search_for_weekend_deals(fs, city_list, current_date, MAX_NUM_DAYS_LOOKAHEAD)
+
+    # construct an email with the weekend deals
+    if all_weekend_matches != []:
+        print("there are matches -- sending email!")
+        email_details = construct_email(all_weekend_matches)
+        nm = NotificationManager()
+        nm.send_email("earthmabus@hotmail.com", email_details['subject'], email_details['message'])
+    else:
+        print("sorry, no weekend deals")
+
+def add_new_user(data_manager: DataManager):
+    username = input("enter a username for yourself: ")
+    email = input("enter your email address: ")
+    first_name = input("enter your first name: ")
+    last_name = input("enter your last name: ")
+    home_iata_code = input("enter your home airport IATA Code: ")
+
+    data_manager.add_user(username, email, first_name, last_name, home_iata_code)
+    print(f"successfully created '{username}'")
+
+def add_user_flights(data_manager: DataManager):
+    # ensure that the specified user exists before adding an entry
+    username = input("enter the username: ")
+    if data_manager.get_user_info(username) is None:
+        print(f"the specified username '{username}' does not exist; please add the user into the system first")
+        print()
+        return
+
+    # at this point we know the username exists...
+    # collect the information regarding the destination
+    city = input("enter the destination city: ")
+    city_iata_code = input("enter the IATA code for the city: ")
+    lowest_price = float(input("enter the lowest price you're willing to pay for this airfare: "))
+
+    # add the destination into the data_manager
+    data_manager.add_destination_city(username, city, city_iata_code, lowest_price)
+    print(f"successfully added new tracker to {city_iata_code} at ${lowest_price}")
+
+def menu(data_manager: DataManager):
+    print("what would you like to do today?")
+    print("1. add a new user")
+    print("2. add destination city for user")
+    print("3. perform search and email")
+    print("4. quit")
+    print()
+    selection = int(input("what is your selection? "))
+    print()
+
+    if selection == 1:
+        print("adding new user...")
+        add_new_user(data_manager)
+    elif selection == 2:
+        print("adding city to track flight prices for...")
+        add_user_flights(data_manager)
+    elif selection == 3:
+        print("searching and emailing all users...")
+        search_and_email(data_manager)
+    elif selection == 4:
+        print("exiting program...")
+    else:
+        print("invalid selection")
 
 # instantiate a DataManager to get travel and price preferences
 dataman = DataManager()
-city_list = dataman.get_data()
 
-# instantiate a FlightSearch to search for flight deals
-fs = FlightSearch()
-fs.get_access_token()
-
-# use the aformentioned objects to search for deals
-all_weekend_matches = search_for_weekend_deals(fs, city_list, current_date, MAX_NUM_DAYS_LOOKAHEAD)
-
-# construct an email with the weekend deals
-if all_weekend_matches != []:
-    print("there are matches -- sending email!")
-    email_details = construct_email(all_weekend_matches)
-    nm = NotificationManager()
-    nm.send_email("earthmabus@hotmail.com", email_details['subject'], email_details['message'])
-else:
-    print("sorry, no weekend deals")
+menu(dataman)
